@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IP Intel — Network Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;--bg2:#0d111c;--bg3:#121827;
+  --border:rgba(96,230,194,0.12);--border2:rgba(96,230,194,0.25);
+  --cyan:#60e6c2;--cyan-dim:rgba(96,230,194,0.6);
+  --amber:#f0a500;--red:#ff4d6d;
+  --text:#e8f0fe;--text-muted:#7a8aaa;--text-dim:#3d4a63;
+  --mono:'JetBrains Mono',monospace;--display:'Syne',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;position:relative}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% -20%,rgba(96,230,194,0.06) 0%,transparent 60%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(96,230,194,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(96,230,194,0.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.container{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:48px 24px 80px}
+.header{text-align:center;margin-bottom:52px}
+.logo-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(96,230,194,0.07);border:1px solid var(--border2);border-radius:100px;padding:6px 16px 6px 10px;margin-bottom:28px;font-size:11px;color:var(--cyan);letter-spacing:0.12em;text-transform:uppercase}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}
+h1{font-family:var(--display);font-size:clamp(36px,6vw,60px);font-weight:800;letter-spacing:-0.03em;line-height:1.05;background:linear-gradient(135deg,#fff 30%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:14px}
+.subtitle{font-size:13px;color:var(--text-muted);letter-spacing:0.04em}
+.search-wrap{position:relative;margin-bottom:44px}
+.search-box{display:flex;align-items:center;background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:6px 6px 6px 20px;gap:12px;transition:border-color 0.2s,box-shadow 0.2s}
+.search-box:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(96,230,194,0.1)}
+.search-icon{color:var(--cyan-dim);flex-shrink:0;font-size:15px}
+.search-input{flex:1;background:transparent;border:none;outline:none;font-family:var(--mono);font-size:16px;color:var(--text);letter-spacing:0.06em}
+.search-input::placeholder{color:var(--text-dim)}
+.btn-lookup{background:var(--cyan);color:#07090f;border:none;border-radius:10px;padding:12px 28px;font-family:var(--display);font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.04em;transition:background 0.2s,transform 0.1s;white-space:nowrap;flex-shrink:0}
+.btn-lookup:hover{background:#7fedd0}
+.btn-lookup:active{transform:scale(0.97)}
+.btn-lookup:disabled{background:var(--text-dim);cursor:not-allowed}
+.quick-ips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center}
+.quick-chip{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:100px;padding:5px 14px;font-size:11px;color:var(--text-muted);cursor:pointer;transition:all 0.15s;letter-spacing:0.04em}
+.quick-chip:hover{background:rgba(96,230,194,0.08);border-color:var(--border2);color:var(--cyan)}
+.error-bar{display:none;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:10px;padding:14px 20px;font-size:13px;color:var(--red);margin-bottom:24px;text-align:center;line-height:1.7}
+.error-bar.visible{display:block}
+.scan-state{display:none;text-align:center;padding:60px 0}
+.scan-state.visible{display:block}
+.scan-ring{width:80px;height:80px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--cyan);margin:0 auto 24px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.scan-label{font-size:12px;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.results{display:none}
+.results.visible{display:block;animation:fadeUp 0.4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.ip-hero{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.ip-hero-left{display:flex;align-items:center;gap:20px}
+.ip-avatar{width:52px;height:52px;border-radius:14px;background:rgba(96,230,194,0.1);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ip-hero-addr{font-family:var(--mono);font-size:clamp(20px,3vw,28px);font-weight:600;color:var(--cyan);letter-spacing:0.04em;margin-bottom:4px}
+.ip-hero-meta{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.meta-dot{color:var(--text-dim)}
+.status-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(96,230,194,0.1);border:1px solid rgba(96,230,194,0.25);border-radius:100px;padding:6px 14px;font-size:11px;color:var(--cyan);letter-spacing:0.08em;text-transform:uppercase}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan)}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px 22px;transition:border-color 0.2s,background 0.2s}
+.card:hover{border-color:var(--border2);background:var(--bg3)}
+.card-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-label::before{content:'';display:inline-block;width:12px;height:1px;background:var(--border2)}
+.card-value{font-size:18px;font-weight:600;color:var(--text);margin-bottom:6px;word-break:break-word}
+.card-sub{font-size:12px;color:var(--text-muted)}
+.card-isp .card-value{color:var(--amber)}
+.card-location .card-value{color:#a78bfa}
+.card-coords .card-value{font-size:14px;color:var(--cyan-dim)}
+.map-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.map-inner{padding:20px 22px 16px}
+
+
+
+.detail-section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}
+.detail-header{padding:14px 22px;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);display:flex;align-items:center;gap:10px}
+.detail-header span{color:var(--cyan-dim);font-size:14px}
+.detail-row{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--border);gap:16px;transition:background 0.15s}
+.detail-row:last-child{border-bottom:none}
+.detail-row:hover{background:rgba(255,255,255,0.02)}
+.detail-key{font-size:12px;color:var(--text-muted);min-width:120px;flex-shrink:0}
+.detail-val{font-size:13px;color:var(--text);text-align:right;word-break:break-word}
+.detail-val.highlight{color:var(--cyan)}
+.detail-val.amber{color:var(--amber)}
+.tag{display:inline-block;padding:3px 10px;border-radius:100px;font-size:11px;background:rgba(96,230,194,0.08);border:1px solid rgba(96,230,194,0.2);color:var(--cyan)}
+.tag.proxy{background:rgba(255,77,109,0.08);border-color:rgba(255,77,109,0.25);color:var(--red)}
+.copy-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--text-muted);cursor:pointer;transition:all 0.15s}
+.copy-btn:hover{border-color:var(--border2);color:var(--cyan)}
+.footer{text-align:center;margin-top:48px;font-size:11px;color:var(--text-dim);letter-spacing:0.05em}
+@media(max-width:560px){.ip-hero{flex-direction:column}.cards-grid{grid-template-columns:1fr}h1{font-size:32px}}
+.leaflet-popup-content-wrapper{background:#0d111c;color:#e8f0fe;border:1px solid rgba(96,230,194,0.25);border-radius:8px;box-shadow:none}
+.leaflet-popup-tip{background:#0d111c}
+.leaflet-bar a{background:#0d111c;color:#60e6c2;border-color:rgba(96,230,194,0.2)}
+.leaflet-bar a:hover{background:#121827}
+.leaflet-control-attribution{background:rgba(7,9,15,0.7)!important;color:#3d4a63;font-size:9px}
+.leaflet-control-attribution a{color:#3d4a63}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="logo-badge"><div class="logo-dot"></div>Network Intelligence System</div>
+    <h1>IP Intel</h1>
+    <p class="subtitle">Trace any IPv4 or IPv6 address — location, ISP, routing &amp; more</p>
+  </header>
+
+  <div class="search-wrap">
+    <div class="search-box">
+      <div class="search-icon">⟩</div>
+      <input type="text" class="search-input" id="ipInput" placeholder="Enter IP address  e.g.  8.8.8.8" autocomplete="off" spellcheck="false"/>
+      <button class="btn-lookup" id="lookupBtn" onclick="doLookup()">Trace →</button>
+    </div>
+    <div class="quick-ips">
+      <span style="font-size:11px;color:var(--text-dim);align-self:center;">Quick:</span>
+      <button class="quick-chip" onclick="quickLookup('8.8.8.8')">8.8.8.8 · Google DNS</button>
+      <button class="quick-chip" onclick="quickLookup('1.1.1.1')">1.1.1.1 · Cloudflare</button>
+      <button class="quick-chip" onclick="quickLookup('208.67.222.222')">208.67.222.222 · OpenDNS</button>
+      <button class="quick-chip" onclick="myIP()">My IP</button>
+    </div>
+  </div>
+
+  <div class="error-bar" id="errorBar"></div>
+  <div class="scan-state" id="scanState">
+    <div class="scan-ring"></div>
+    <div class="scan-label" id="scanLabel">Initializing scan...</div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="ip-hero">
+      <div class="ip-hero-left">
+        <div class="ip-avatar" id="ipFlag">🌐</div>
+        <div>
+          <div class="ip-hero-addr" id="heroIP">—</div>
+          <div class="ip-hero-meta">
+            <span id="heroOrg">—</span><span class="meta-dot">·</span>
+            <span id="heroCountry">—</span><span class="meta-dot">·</span>
+            <span id="heroTz">—</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="copy-btn" onclick="copyIP()">Copy IP</button>
+        <div class="status-badge"><div class="status-dot"></div><span>Resolved</span></div>
+      </div>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card card-location">
+        <div class="card-label">Geographic Location</div>
+        <div class="card-value" id="cardCity">—</div>
+        <div class="card-sub" id="cardRegion">—</div>
+      </div>
+      <div class="card card-isp">
+        <div class="card-label">ISP / Organization</div>
+        <div class="card-value" id="cardISP">—</div>
+        <div class="card-sub" id="cardAS">—</div>
+      </div>
+      <div class="card card-coords">
+        <div class="card-label">Coordinates</div>
+        <div class="card-value" id="cardCoords">—</div>
+        <div class="card-sub" id="cardTimezone">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Postal / Zip</div>
+        <div class="card-value" id="cardZip">—</div>
+        <div class="card-sub" id="cardContinent">—</div>
+      </div>
+    </div>
+
+    <div class="map-card">
+      <div class="map-inner"><div class="card-label">Approximate Location</div></div>
+      <div id="leafletMap" style="height:240px;width:100%;border-top:1px solid rgba(96,230,194,0.12);"></div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-header"><span>◈</span> Network Details</div>
+      <div class="detail-row"><div class="detail-key">IP Address</div><div class="detail-val highlight" id="dIP">—</div></div>
+      <div class="detail-row"><div class="detail-key">IP Version</div><div class="detail-val" id="dIPVer">—</div></div>
+      <div class="detail-row"><div class="detail-key">Hostname</div><div class="detail-val" id="dHostname">—</div></div>
+      <div class="detail-row"><div class="detail-key">ISP</div><div class="detail-val amber" id="dISP">—</div></div>
+      <div class="detail-row"><div class="detail-key">Organization</div><div class="detail-val" id="dOrg">—</div></div>
+      <div class="detail-row"><div class="detail-key">ASN</div><div class="detail-val" id="dASN">—</div></div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-header"><span>◈</span> Location Details</div>
+      <div class="detail-row"><div class="detail-key">Country</div><div class="detail-val" id="dCountry">—</div></div>
+      <div class="detail-row"><div class="detail-key">Country Code</div><div class="detail-val highlight" id="dCC">—</div></div>
+      <div class="detail-row"><div class="detail-key">Region</div><div class="detail-val" id="dRegion">—</div></div>
+      <div class="detail-row"><div class="detail-key">City</div><div class="detail-val" id="dCity2">—</div></div>
+      <div class="detail-row"><div class="detail-key">Postal Code</div><div class="detail-val" id="dZip">—</div></div>
+      <div class="detail-row"><div class="detail-key">Latitude</div><div class="detail-val" id="dLat">—</div></div>
+      <div class="detail-row"><div class="detail-key">Longitude</div><div class="detail-val" id="dLon">—</div></div>
+      <div class="detail-row"><div class="detail-key">Timezone</div><div class="detail-val" id="dTZ">—</div></div>
+      <div class="detail-row"><div class="detail-key">UTC Offset</div><div class="detail-val" id="dOffset">—</div></div>
+      <div class="detail-row"><div class="detail-key">Local Time</div><div class="detail-val highlight" id="dLocalTime">—</div></div>
+      <div class="detail-row"><div class="detail-key">Security Flags</div><div class="detail-val" id="securityRow">—</div></div>
+    </div>
+  </div>
+
+  <footer class="footer"><p id="footerSrc">IP INTEL · ipinfo.io / ip-api.com · For informational purposes only</p></footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var G = function(id){ return document.getElementById(id); };
+var scanMessages = ['Resolving hostname...','Querying routing tables...','Geolocating node...','Fetching ASN data...','Aggregating intel...'];
+var scanTimer;
+
+function showScan(){
+  G('scanState').classList.add('visible');
+  G('results').classList.remove('visible');
+  G('errorBar').classList.remove('visible');
+  var i=0; G('scanLabel').textContent = scanMessages[0];
+  clearInterval(scanTimer);
+  scanTimer = setInterval(function(){ i=(i+1)%scanMessages.length; G('scanLabel').textContent=scanMessages[i]; }, 700);
+}
+function hideScan(){ clearInterval(scanTimer); G('scanState').classList.remove('visible'); }
+function showError(html){ var b=G('errorBar'); b.innerHTML='&#9888; '+html; b.classList.add('visible'); }
+
+function flag(cc){
+  if(!cc||cc.length!==2) return '🌐';
+  var o=0x1F1E6-65;
+  return String.fromCodePoint(cc.charCodeAt(0)+o)+String.fromCodePoint(cc.charCodeAt(1)+o);
+}
+function localTime(tz){
+  try{ return new Intl.DateTimeFormat('en-US',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,weekday:'short',month:'short',day:'numeric'}).format(new Date()); }catch(e){ return 'N/A'; }
+}
+function utcOffset(tz){
+  try{ var p=new Intl.DateTimeFormat('en',{timeZone:tz,timeZoneName:'shortOffset'}).formatToParts(new Date()); var o=p.find(function(x){return x.type==='timeZoneName';}); return o?o.value:'N/A'; }catch(e){ return 'N/A'; }
+}
+var _leafletMap = null;
+var _leafletMarker = null;
+
+function initMap(lat, lon) {
+  if (!lat || !lon) return;
+  // Give the DOM a tick to render the container
+  setTimeout(function() {
+    var container = document.getElementById('leafletMap');
+    if (!container) return;
+
+    // Destroy old map if it exists
+    if (_leafletMap) {
+      _leafletMap.remove();
+      _leafletMap = null;
+      _leafletMarker = null;
+    }
+
+    _leafletMap = L.map('leafletMap', {
+      center: [lat, lon],
+      zoom: 6,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    // Dark-styled OSM tiles via CartoDB Dark Matter
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 18
+    }).addTo(_leafletMap);
+
+    // Custom glowing cyan marker
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:#60e6c2;border:2px solid #07090f;box-shadow:0 0 0 4px rgba(96,230,194,0.3),0 0 14px #60e6c2;"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+
+    _leafletMarker = L.marker([lat, lon], {icon: icon})
+      .addTo(_leafletMap)
+      .bindPopup('<b style="font-family:monospace;color:#07090f;">' + lat.toFixed(4) + ', ' + lon.toFixed(4) + '</b>');
+
+    _leafletMap.invalidateSize();
+  }, 60);
+}
+
+function populate(d, src){
+  var f=flag(d.countryCode);
+  G('ipFlag').textContent=f;
+  G('heroIP').textContent=d.query;
+  G('heroOrg').textContent=d.isp||d.org||'Unknown';
+  G('heroCountry').textContent=[d.city,d.country].filter(Boolean).join(', ')||'Unknown';
+  G('heroTz').textContent=d.timezone||'N/A';
+  G('cardCity').textContent=[d.city,d.regionName].filter(Boolean).join(', ')||'N/A';
+  G('cardRegion').textContent=d.country||'N/A';
+  G('cardISP').textContent=d.isp||'N/A';
+  G('cardAS').textContent=d.as||'N/A';
+  G('cardCoords').textContent=(d.lat!=null)?d.lat.toFixed(4)+', '+d.lon.toFixed(4):'N/A';
+  G('cardTimezone').textContent=d.timezone||'N/A';
+  G('cardZip').textContent=d.zip||'N/A';
+  G('cardContinent').textContent=d.continent||'N/A';
+  G('dIP').textContent=d.query;
+  G('dIPVer').textContent=d.query.includes(':')? 'IPv6':'IPv4';
+  G('dHostname').textContent=d.reverse||'Not available';
+  G('dISP').textContent=d.isp||'N/A';
+  G('dOrg').textContent=d.org||'N/A';
+  G('dASN').textContent=d.as||'N/A';
+  G('dCountry').textContent=f+'  '+(d.country||'N/A');
+  G('dCC').textContent=d.countryCode||'N/A';
+  G('dRegion').textContent=[d.regionName,d.region].filter(Boolean).join(' · ')||'N/A';
+  G('dCity2').textContent=d.city||'N/A';
+  G('dZip').textContent=d.zip||'N/A';
+  G('dLat').textContent=(d.lat!=null)?d.lat.toFixed(6):'N/A';
+  G('dLon').textContent=(d.lon!=null)?d.lon.toFixed(6):'N/A';
+  G('dTZ').textContent=d.timezone||'N/A';
+  G('dOffset').textContent=d.utcOffset||(d.timezone?utcOffset(d.timezone):'N/A');
+  G('dLocalTime').textContent=d.timezone?localTime(d.timezone):'N/A';
+  var tags=[];
+  if(d.isVPN) tags.push('<span class="tag proxy">VPN</span>');
+  if(d.isTor) tags.push('<span class="tag proxy">Tor Exit</span>');
+  if(d.isProxy) tags.push('<span class="tag proxy">Proxy</span>');
+  if(d.isHosting) tags.push('<span class="tag">Hosting / DC</span>');
+  if(!tags.length) tags.push('<span class="tag">Clean</span>');
+  G('securityRow').innerHTML=tags.join(' ');
+  initMap(d.lat, d.lon);
+  G('footerSrc').textContent='IP INTEL · Data via '+(src||'ip-api.com')+' · For informational purposes only';
+}
+
+function isPrivate(ip){
+  return [/^10\./,/^172\.(1[6-9]|2\d|3[01])\./,/^192\.168\./,/^127\./,/^169\.254\./,/^::1$/,/^fc00:/i,/^fe80:/i,/^0\.0\.0\.0$/,/^localhost$/i].some(function(r){return r.test(ip);});
+}
+
+// JSONP — works from file:// in all browsers (no fetch/CORS involved)
+function jsonp(url){
+  return new Promise(function(resolve,reject){
+    var id='_cb'+Date.now()+Math.random().toString(36).slice(2);
+    var el=document.createElement('script');
+    var done=false;
+    function cleanup(){ done=true; delete window[id]; el.parentNode&&el.parentNode.removeChild(el); }
+    window[id]=function(data){ if(done)return; cleanup(); resolve(data); };
+    el.onerror=function(){ if(done)return; cleanup(); reject(new Error('blocked')); };
+    setTimeout(function(){ if(done)return; cleanup(); reject(new Error('timeout')); },8000);
+    el.src=url+(url.indexOf('?')>=0?'&':'?')+'callback='+id;
+    document.head.appendChild(el);
+  });
+}
+
+function run(target){
+  var ip=target?encodeURIComponent(target):'';
+  // Try ip-api.com first, then ipinfo.io as fallback
+  var p1 = jsonp('https://ip-api.com/json/'+ip+'?fields=status,message,continent,country,countryCode,regionName,region,city,zip,lat,lon,timezone,isp,org,as,reverse,query')
+    .then(function(d){
+      if(d.status!=='success') throw new Error(d.message||'Lookup failed');
+      return {src:'ip-api.com', query:d.query, country:d.country, countryCode:d.countryCode, continent:d.continent,
+        region:d.region, regionName:d.regionName, city:d.city, zip:d.zip||'', lat:d.lat, lon:d.lon,
+        timezone:d.timezone||'', utcOffset:'', isp:d.isp||'', org:d.org||'', as:d.as||'',
+        reverse:d.reverse||'Not available', isProxy:false,isTor:false,isVPN:false,isHosting:false};
+    });
+
+  var p2 = jsonp('https://ipinfo.io/'+(target?ip+'/json':'json'))
+    .then(function(d){
+      if(d.error) throw new Error(d.error.message||'Lookup failed');
+      var loc=(d.loc||'0,0').split(',');
+      return {src:'ipinfo.io', query:d.ip, country:d.country, countryCode:d.country, continent:'',
+        region:'', regionName:d.region||'', city:d.city||'', zip:d.postal||'',
+        lat:parseFloat(loc[0])||0, lon:parseFloat(loc[1])||0,
+        timezone:d.timezone||'', utcOffset:'', isp:d.org||'', org:d.org||'', as:d.org||'',
+        reverse:d.hostname||'Not available', isProxy:false,isTor:false,isVPN:false,isHosting:false};
+    });
+
+  // race both — use whichever responds first and succeeds
+  return Promise.any ? Promise.any([p1,p2]) : p1.catch(function(){ return p2; });
+}
+
+function doLookup(){
+  var val=G('ipInput').value.trim();
+  if(!val){ showError('Please enter an IP address'); return; }
+  if(isPrivate(val)){ showError('"'+val+'" is a private / reserved IP — not traceable on the internet. Try a public IP like <b>8.8.8.8</b>.'); return; }
+  G('lookupBtn').disabled=true;
+  showScan();
+  run(val).then(function(d){
+    hideScan(); populate(d,d.src); G('results').classList.add('visible');
+  }).catch(function(e){
+    hideScan();
+    showError((e.message||'Failed')+' &mdash; Try opening in Chrome, or check your internet connection.');
+  }).finally(function(){ G('lookupBtn').disabled=false; });
+}
+
+function myIP(){
+  G('ipInput').value='';
+  G('lookupBtn').disabled=true;
+  showScan();
+  run(null).then(function(d){
+    hideScan(); G('ipInput').value=d.query; populate(d,d.src); G('results').classList.add('visible');
+  }).catch(function(e){
+    hideScan(); showError('Could not detect your IP: '+(e.message||''));
+  }).finally(function(){ G('lookupBtn').disabled=false; });
+}
+
+function quickLookup(ip){ G('ipInput').value=ip; doLookup(); }
+
+function copyIP(){
+  var ip=G('heroIP').textContent;
+  if(ip&&ip!=='—'){ navigator.clipboard.writeText(ip).then(function(){ var b=document.querySelector('.copy-btn'),o=b.textContent; b.textContent='Copied!'; setTimeout(function(){b.textContent=o;},1500); }); }
+}
+
+G('ipInput').addEventListener('keydown',function(e){ if(e.key==='Enter') doLookup(); });
+
+
+</script>
+</body>
+</html>
